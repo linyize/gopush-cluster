@@ -30,10 +30,12 @@ import (
 
 // PushPrivate handle for push private message.
 func PushPrivate(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "POST" {
-		http.Error(w, "Method Not Allowed", 405)
-		return
-	}
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+        w.Header().Set("Access-Control-Allow-Headers", "X-Requested-With,Content-Type")
+        if r.Method != "POST" {
+                //http.Error(w, "Method Not Allowed", 405)
+                return
+        }
 	body := ""
 	res := map[string]interface{}{"ret": OK}
 	defer retPWrite(w, r, res, &body, time.Now())
