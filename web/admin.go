@@ -36,6 +36,11 @@ func PushPrivate(w http.ResponseWriter, r *http.Request) {
 		PushPrivatePOST(w, r)
 	case "GET":
 		PushPrivateJSONP(w, r)
+	case "OPTIONS":
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "X-Requested-With,Content-Type")
+		w.WriteHeader(200)
+		return
 	default:
 		http.Error(w, "Method Not Allowed", 405)
 	}
