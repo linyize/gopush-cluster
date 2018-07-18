@@ -17,25 +17,85 @@
 package main
 
 import (
-	log "github.com/alecthomas/log4go"
 	"encoding/json"
-	myrpc "github.com/Terry-Mao/gopush-cluster/rpc"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
+
+	myrpc "github.com/Terry-Mao/gopush-cluster/rpc"
+	log "github.com/alecthomas/log4go"
 )
 
 // PushPrivate handle for push private message.
 func PushPrivate(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "POST":
+		PushPrivatePOST(w, r)
+	case "GET":
+		PushPrivateJSONP(w, r)
+	default:
+		http.Error(w, "Method Not Allowed", 405)
+	}
+}
+
+// PushPrivateJSONP handle for push private message.
+func PushPrivateJSONP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method Not Allowed", 405)
+		return
+	}
+	// param
+	params := r.URL.Query()
+	body := params.Get("data")
+	bodyBytes := []byte(body)
+	key := params.Get("key")
+	callback := params.Get("cb")
+	res := map[string]interface{}{"ret": OK}
+	defer retWrite(w, r, res, callback, time.Now())
+	expire, err := strconv.ParseUint(params.Get("expire"), 10, 32)
+	if err != nil {
+		res["ret"] = ParamErr
+		log.Error("strconv.ParseUint(\"%s\", 10, 32) error(%v)", params.Get("expire"), err)
+		return
+	}
+	node := myrpc.GetComet(key)
+	if node == nil || node.Rpc == nil {
+		res["ret"] = NotFoundServer
+		return
+	}
+	client := node.Rpc.Get()
+	if client == nil {
+		res["ret"] = NotFoundServer
+		return
+	}
+	rm := json.RawMessage(bodyBytes)
+	msg, err := rm.MarshalJSON()
+	if err != nil {
+		res["ret"] = ParamErr
+		log.Error("json.RawMessage(\"%s\").MarshalJSON() error(%v)", body, err)
+		return
+	}
+	args := &myrpc.CometPushPrivateArgs{Msg: json.RawMessage(msg), Expire: uint(expire), Key: key}
+	ret := 0
+	if err := client.Call(myrpc.CometServicePushPrivate, args, &ret); err != nil {
+		log.Error("client.Call(\"%s\", \"%s\", &ret) error(%v)", myrpc.CometServicePushPrivate, args.Key, err)
+		res["ret"] = InternalErr
+		return
+	}
+	return
+}
+
+// PushPrivatePOST handle for push private message.
+func PushPrivatePOST(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-        w.Header().Set("Access-Control-Allow-Headers", "X-Requested-With,Content-Type")
-        if r.Method != "POST" {
-                //http.Error(w, "Method Not Allowed", 405)
-                return
-        }
+	w.Header().Set("Access-Control-Allow-Headers", "X-Requested-With,Content-Type")
+	if r.Method != "POST" {
+		http.Error(w, "Method Not Allowed", 405)
+		return
+	}
 	body := ""
 	res := map[string]interface{}{"ret": OK}
 	defer retPWrite(w, r, res, &body, time.Now())
